@@ -22,19 +22,41 @@ public class AudioPlayer: Node {
     }
 
     /// Whether or not the playing is playing
-    public private(set) var isPlaying: Bool = false
+    public internal(set) var isPlaying: Bool = false
 
     /// Whether or not the playing is paused
-    public private(set) var isPaused: Bool = false
+    public internal(set) var isPaused: Bool = false
 
     /// Will be true if there is an existing scheduled event
     public var isScheduled: Bool {
         scheduleTime != nil
     }
 
+    /// The current sample rate of the buffer or file
+    public var sampleRate: Double {
+        return (isBuffered ? buffer?.format.sampleRate : file?.processingFormat.sampleRate) ?? 0
+    }
+    
     /// If the player is currently using a buffer as an audio source
     public internal(set) var isBuffered: Bool = false
-
+    
+    /// Used to get the correct current time, after seeking
+    internal var elapsedTimeOffset: Double = 0
+    private var lastPausedTime: Double?
+    public var currentTime: TimeInterval {
+        if isPlaying {
+            if let nodeTime = playerNode.lastRenderTime,
+               let playerTime = playerNode.playerTime(forNodeTime: nodeTime) {
+                return Double(elapsedTimeOffset) + (Double(playerTime.sampleTime) / playerTime.sampleRate)
+            }
+        }
+        if isPaused && lastPausedTime != nil {
+            return lastPausedTime!
+        }
+        return 0
+    }
+    
+    
     /// When buffered this should be called before scheduling events. For disk streaming
     /// this could be called at any time before a file is done playing
     public var isLooping: Bool = false {
@@ -218,6 +240,7 @@ public class AudioPlayer: Node {
     public func pause() {
         guard isPlaying, !isPaused else { return }
 
+        lastPausedTime = self.currentTime
         playerNode.pause()
         isPaused = true
     }
